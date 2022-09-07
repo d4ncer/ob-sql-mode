@@ -145,8 +145,8 @@
 (require 'sql)
 
 (defcustom org-babel-sql-mode-start-interpreter-prompt
-  (lambda (bufname buf product)
-    (y-or-n-p (format "Interpreter not running in %s.  Start it? " bufname)))
+  (lambda (bufname connection)
+    (y-or-n-p (format "Interpreter not running in %s for %s.  Start it? " bufname connection)))
   "Function to call if the buffer BUF called BUFNAME is not running PRODUCT.
 
 If the function returns t then a buffer will be created, otherwise the
@@ -186,18 +186,18 @@ The hook should return a new BODY modified in some way.")
 (with-eval-after-load "org"
   (add-to-list 'org-src-lang-modes '("sql-mode" . sql))
   (let* ((split-version (split-string org-version "\\."))
-	 (org-major (string-to-number (nth 0 split-version)))
-	 (org-minor (string-to-number (nth 1 split-version))))
+     (org-major (string-to-number (nth 0 split-version)))
+     (org-minor (string-to-number (nth 1 split-version))))
     (if (or (and (= org-major 9)
-		 (< org-minor 2))
-	    (< org-major 9))
-	(add-to-list 'org-structure-template-alist
-		     `(,org-babel-sql-mode-template-selector
+         (< org-minor 2))
+        (< org-major 9))
+    (add-to-list 'org-structure-template-alist
+             `(,org-babel-sql-mode-template-selector
                        "#+BEGIN_SRC sql-mode ?\n\n#+END_SRC"
                        "#+BEGIN_SRC sql-mode ?\n\n#+END_SRC"))
       (add-to-list 'org-structure-template-alist
-		   `(,org-babel-sql-mode-template-selector
-		     . "src sql-mode")))))
+           `(,org-babel-sql-mode-template-selector
+             . "src sql-mode")))))
 
 
 ;; On Windows systems the "-interactive" option is required, otherwise
@@ -226,13 +226,13 @@ The hook should return a new BODY modified in some way.")
       ;; The output may contain the prompt or (more likely) the continuation
       ;; prompt. Search for both and remove them.
       (save-match-data
-	(goto-char (point-min))
-	(while (re-search-forward sql-prompt-regexp nil t)
-	  (replace-match "")))
-	(goto-char (point-min))
-	(while (re-search-forward sql-prompt-cont-regexp nil t)
-	  (replace-match ""))
-	(buffer-string))))
+    (goto-char (point-min))
+    (while (re-search-forward sql-prompt-regexp nil t)
+      (replace-match "")))
+    (goto-char (point-min))
+    (while (re-search-forward sql-prompt-cont-regexp nil t)
+      (replace-match ""))
+    (buffer-string))))
 
 (defun org-babel-sql-mode-initiate-session (&optional session _params)
   "Return the comint buffer for this `SESSION'.
@@ -241,20 +241,20 @@ Determines the buffer from values in `PARAMS'."
   (let* ((bufname (org-babel-sql-mode--buffer-name _params))
          (sql-bufname (format "*SQL: %s*" bufname))
          (buf (get-buffer sql-bufname))
-         (product (intern (cdr (assoc :product _params)))))
-    (unless (assoc product sql-product-alist)
-      (user-error "Product `%s' is not in `sql-product-alist'" product))
+         (connection (intern (cdr (assoc :connection _params)))))
+    (unless (assoc connection sql-connection-alist)
+      (user-error "Connection `%s' is not in `sql-connection-alist'" connection))
     (save-current-buffer
-      (unless (sql-buffer-live-p buf product)
+      (unless (sql-buffer-live-p buf)
         (if (funcall org-babel-sql-mode-start-interpreter-prompt
-		     sql-bufname buf product )
+                     sql-bufname connection)
             ;; Temporarily redefine pop-to-buffer to do nothing, so
             ;; that when sql-product-interactive calls it nothing
             ;; happens.  Otherwise the frame is split to show the
             ;; interactive buffer, which is not wanted.
             (let ((old-pop-to-buffer (symbol-function 'pop-to-buffer)))
               (fset 'pop-to-buffer #'(lambda (&rest _r)))
-              (sql-product-interactive product bufname)
+              (sql-connect connection bufname)
               (fset 'pop-to-buffer old-pop-to-buffer))
           (user-error "Can't do anything without an SQL interactive buffer")))
       (get-buffer sql-bufname))))
@@ -265,7 +265,7 @@ Determines the buffer from values in `PARAMS'."
 The buffer name is (currently) derived from the :product and :session
 keys in `PARAMS', but do not depend on this."
   (format "%s:%s" (cdr (assoc :product params))
-          (cdr (assoc :session params))))
+          (cdr (assoc :connection params))))
 
 (provide 'ob-sql-mode)
 ;;; ob-sql-mode.el ends here
